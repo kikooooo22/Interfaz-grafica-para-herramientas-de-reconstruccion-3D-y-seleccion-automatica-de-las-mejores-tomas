@@ -1,117 +1,168 @@
 import os
-import threading
+import subprocess
 import cv2
 import evaluators
-import shutil 
-from tkinter import ttk,Tk, Button, Frame, Label, filedialog, messagebox, Entry
+import shutil
+import threading 
+from tkinter import ttk, Tk, Button, Frame, Label, filedialog, messagebox, Entry
 from PIL import Image
 
-# Lista para guardar imágenes y sus rutas
-imagenes_guardadas = []
+# Variable global para almacenar la ruta de la carpeta de imágenes
+ruta_imagenes = None
 
-def seleccionar_carpeta(carpeta, label_contador, progressbar, entry_framerate):
-    global imagenes_guardadas
-    imagenes_guardadas = []
+def actualizar_contador(label_contador, label_carpeta_actual):
+    """
+    Cuenta las imágenes en la carpeta actual y actualiza el contador en la interfaz.
+    """
+    global ruta_imagenes
+
+    if not ruta_imagenes or not os.path.exists(ruta_imagenes):
+        label_contador.config(text="Imágenes cargadas: 0")
+        label_carpeta_actual.config(text="Carpeta actual: Ninguna")
+        return
+
+    # Contar las imágenes en la carpeta
+    formatos_imagen = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"]
+    lista_archivos = [archivo for archivo in os.listdir(ruta_imagenes) if any(archivo.lower().endswith(formato) for formato in formatos_imagen)]
+
+    # Actualizar el contador de imágenes
+    label_contador.config(text=f"Imágenes cargadas: {len(lista_archivos)}")
+    label_carpeta_actual.config(text=f"Carpeta actual: {ruta_imagenes}")
+
+def probar_entorno_conda(nombre_entorno, btn_probar):
+    """
+    Prueba si el entorno de Conda se carga correctamente.
+    """
+    try:
+
+        # Deshabilitar el botón para evitar múltiples clics
+        ventana.after(0, btn_probar.config, {"state": "disabled"})
+
+        # Comando para activar el entorno y ejecutar un comando de prueba
+        comando = f'conda run -n {nombre_entorno} python -c "print(\'¡Entorno {nombre_entorno} cargado correctamente!\')"'
+
+        # Ejecutar el comando en la terminal
+        proceso = subprocess.Popen(comando, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        salida, errores = proceso.communicate()
+
+        # Mostrar la salida y los errores en la interfaz
+        if salida:
+            ventana.after(0, messagebox.showinfo, "Salida", salida.decode("utf-8"))
+        if errores:
+            ventana.after(0, messagebox.showerror, "Errores", errores.decode("utf-8"))
+    except Exception as e:
+        ventana.after(0, messagebox.showerror, "Error", f"No se pudo ejecutar el comando: {e}")
+    finally:
+        # Rehabilitar el botón al finalizar, ya sea con éxito o con error
+        ventana.after(0, btn_probar.config, {"state": "normal"})
+
+def seleccionar_carpeta(label_contador, entry_framerate, label_carpeta_actual):
+    """
+    Selecciona una carpeta y actualiza la interfaz.
+    """
+    global ruta_imagenes
+
+    # Pedir al usuario que seleccione una carpeta
+    carpeta = filedialog.askdirectory()
+    if not carpeta:  # Si el usuario cancela, no hacer nada
+        return
 
     # Limpiar el campo de framerate al cargar una carpeta
     entry_framerate.delete(0, "end")
 
-    formatos_imagen = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"]
-    lista_archivos = [archivo for archivo in os.listdir(carpeta) if any(archivo.lower().endswith(formato) for formato in formatos_imagen)]
+    # Actualizar la ruta de la carpeta de imágenes
+    ruta_imagenes = carpeta
 
-    total_imagenes = len(lista_archivos)
+    # Actualizar el contador y la carpeta actual
+    actualizar_contador(label_contador, label_carpeta_actual)
 
-    def cargar_imagenes():
-        for i, archivo in enumerate(lista_archivos):
-            ruta_imagen = os.path.join(carpeta, archivo)
-            try:
-                # Cargar y redimensionar la imagen
-                imagen = Image.open(ruta_imagen).convert("RGB")
-                imagen.thumbnail((150, 150))  # Redimensionar para ahorrar memoria
+def cargar_video(label_contador, progressbar, entry_framerate, label_carpeta_actual):
+    """
+    Carga un video y extrae los frames en segundo plano.
+    """
+    global ruta_imagenes
 
-                # Guardar la imagen redimensionada en la lista
-                imagenes_guardadas.append((ruta_imagen, imagen))
-
-                # Actualizar la barra de progreso y el contador
-                progreso = (i + 1) / total_imagenes * 100
-                ventana.after(0, actualizar_interfaz, progressbar, progreso, label_contador, len(imagenes_guardadas))
-            except Exception as e:
-                print(f"No se pudo abrir la imagen {archivo}: {e}")
-                ventana.after(0, messagebox.showerror, "Error", f"No se pudo abrir la imagen {archivo}: {e}")
-
-    # Ejecutar el proceso de carga en un hilo separado
-    threading.Thread(target=cargar_imagenes).start()
-
-def actualizar_interfaz(progressbar, valor, label_contador, contador_imagenes):
-    # Actualizar la barra de progreso
-    progressbar["value"] = valor
-    # Actualizar el contador de imágenes
-    label_contador.config(text=f"Imágenes cargadas: {contador_imagenes}")
-    ventana.update_idletasks()
-
-def evaluar_imagenes():
-    if not imagenes_guardadas:
-        messagebox.showwarning("Atención", "No hay imágenes cargadas.")
+    # Pedir al usuario que seleccione un video
+    ruta_video = filedialog.askopenfilename(filetypes=[("Video files", "*.mp4 *.avi *.mkv")])
+    if not ruta_video:  # Si el usuario cancela, no hacer nada
         return
 
-    evaluador = evaluators.Evaluators(imagenes_guardadas)
-    scores = evaluador.evalTenengradSobel()
+    # Ejecutar la extracción de frames en un hilo separado
+    threading.Thread(
+        target=extraer_frames,
+        args=(ruta_video, label_contador, progressbar, entry_framerate, label_carpeta_actual),
+        daemon=True  # El hilo se detendrá cuando se cierre la aplicación
+    ).start()
 
-    for (ruta, _), score in zip(imagenes_guardadas, scores):
-        print(f"Calidad Tenengrad+Sobel para {os.path.basename(ruta)}: {score}")
+def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, label_carpeta_actual):
+    """
+    Extrae los frames de un video en segundo plano.
+    """
+    global ruta_imagenes
 
-def cargar_video(label_contador, progressbar, entry_framerate):
-    ruta_video = filedialog.askopenfilename(filetypes=[("Video files", "*.mp4 *.avi *.mkv")])
-    if ruta_video:
-        try:
-            # Crear una carpeta para guardar los frames
-            carpeta_frames = os.path.join(os.path.dirname(ruta_video), "frames")
-            os.makedirs(carpeta_frames, exist_ok=True)
+    try:
+        # Crear una carpeta para guardar los frames
+        carpeta_frames = os.path.join(os.path.dirname(ruta_video), "input")
+        os.makedirs(carpeta_frames, exist_ok=True)
 
-            # Extraer todos los frames del video
-            cap = cv2.VideoCapture(ruta_video)
-            fps_video = int(cap.get(cv2.CAP_PROP_FPS))  # Obtener los FPS del video
+        # Extraer todos los frames del video
+        cap = cv2.VideoCapture(ruta_video)
+        fps_video = int(cap.get(cv2.CAP_PROP_FPS))  # Obtener los FPS del video
 
-            # Mostrar el framerate en el campo de texto
-            entry_framerate.delete(0, "end")
-            entry_framerate.insert(0, str(fps_video))
+        # Mostrar el framerate en el campo de texto
+        ventana.after(0, entry_framerate.delete, 0, "end")
+        ventana.after(0, entry_framerate.insert, 0, str(fps_video))
 
-            # Obtener la orientación del video (si está disponible en los metadatos)
-            rotation_code = obtener_rotacion_video(ruta_video)
+        # Obtener la orientación del video (si está disponible en los metadatos)
+        rotation_code = obtener_rotacion_video(ruta_video)
 
-            frame_count = 0
-            saved_count = 0
+        frame_count = 0
+        saved_count = 0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Total de frames en el video
 
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-                # Rotar el frame si es necesario
-                if rotation_code is not None:
-                    frame = rotar_frame(frame, rotation_code)
+            # Rotar el frame si es necesario
+            if rotation_code is not None:
+                frame = rotar_frame(frame, rotation_code)
 
-                # Guardar el frame
-                ruta_frame = os.path.join(carpeta_frames, f"frame_{saved_count:04d}.jpg")
-                cv2.imwrite(ruta_frame, frame)
-                saved_count += 1
+            # Guardar el frame
+            ruta_frame = os.path.join(carpeta_frames, f"frame_{saved_count:04d}.jpg")
+            cv2.imwrite(ruta_frame, frame)
+            saved_count += 1
 
-                frame_count += 1
+            # Actualizar la barra de progreso
+            progreso = (frame_count + 1) / total_frames * 100
+            ventana.after(0, actualizar_progreso, progressbar, progreso)
+            frame_count += 1
 
-            cap.release()
-            messagebox.showinfo("Éxito", f"Se extrajeron {saved_count} frames en {carpeta_frames}")
+        cap.release()
+        ventana.after(0, messagebox.showinfo, "Éxito", f"Se extrajeron {saved_count} frames en {carpeta_frames}")
 
-            # Cargar los frames en la interfaz
-            seleccionar_carpeta(carpeta_frames, label_contador, progressbar, entry_framerate)
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo extraer los frames: {e}")
+        # Actualizar la ruta de la carpeta de imágenes
+        ruta_imagenes = carpeta_frames
+
+        # Actualizar el contador y la carpeta actual
+        ventana.after(0, actualizar_contador, label_contador, label_carpeta_actual)
+    except Exception as e:
+        ventana.after(0, messagebox.showerror, "Error", f"No se pudo extraer los frames: {e}")
+
+def actualizar_progreso(progressbar, valor):
+    """
+    Actualiza la barra de progreso.
+    """
+    progressbar["value"] = valor
+    ventana.update_idletasks()
 
 def obtener_rotacion_video(ruta_video):
     """
     Obtiene el código de rotación del video a partir de sus metadatos.
     """
     try:
-        import ffmpeg 
+        import ffmpeg  # Necesitas instalar ffmpeg-python: pip install ffmpeg-python
 
         # Obtener los metadatos del video
         metadata = ffmpeg.probe(ruta_video)
@@ -139,60 +190,103 @@ def rotar_frame(frame, rotation_code):
     else:
         return frame
 
-def extraer_mejores_tomas(entry_n, label_contador, progressbar, entry_framerate):
-    try:
-        n = int(entry_n.get())  # Obtener el número de mejores imágenes por segundo
-        if n <= 0:
-            messagebox.showerror("Error", "El número de imágenes por segundo debe ser mayor que 0.")
-            return
+def extraer_mejores_tomas(entry_n, label_contador, entry_framerate, label_carpeta_actual, progressbar, btn_extraer):
+    """
+    Extrae las mejores tomas en segundo plano.
+    """
+    global ruta_imagenes
 
-        # Obtener los FPS del video desde el campo de texto
-        fps_video = int(entry_framerate.get()) if entry_framerate.get() else 30  # Valor predeterminado si no se especifica
+    if not ruta_imagenes:
+        ventana.after(0, messagebox.showwarning, "Atención", "No hay imágenes cargadas.")
+        return
+
+    # Deshabilitar el botón para evitar múltiples clics
+    btn_extraer.config(state="disabled")
+
+    # Obtener el número de mejores imágenes por segundo
+    try:
+        n = int(entry_n.get())
+        if n <= 0:
+            ventana.after(0, messagebox.showerror, "Error", "El número de imágenes por segundo debe ser mayor que 0.")
+            btn_extraer.config(state="normal")  # Rehabilitar el botón en caso de error
+            return
+    except ValueError:
+        ventana.after(0, messagebox.showerror, "Error", "El valor ingresado no es válido.")
+        btn_extraer.config(state="normal")  # Rehabilitar el botón en caso de error
+        return
+
+    # Obtener los FPS del video desde el campo de texto
+    try:
+        fps_video = int(entry_framerate.get()) if entry_framerate.get() else 30
+    except ValueError:
+        ventana.after(0, messagebox.showerror, "Error", "El framerate ingresado no es válido.")
+        btn_extraer.config(state="normal")  # Rehabilitar el botón en caso de error
+        return
+
+    # Ejecutar la extracción de mejores tomas en un hilo separado
+    threading.Thread(
+        target=procesar_mejores_tomas,
+        args=(n, fps_video, label_contador, label_carpeta_actual, progressbar, btn_extraer),
+        daemon=True  # El hilo se detendrá cuando se cierre la aplicación
+    ).start()
+
+def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, progressbar, btn_extraer):
+    """
+    Procesa las mejores tomas en segundo plano.
+    """
+    global ruta_imagenes
+
+    try:
+        # Cargar las imágenes desde la carpeta
+        formatos_imagen = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"]
+        lista_archivos = [archivo for archivo in os.listdir(ruta_imagenes) if any(archivo.lower().endswith(formato) for formato in formatos_imagen)]
+        rutas_imagenes = [os.path.join(ruta_imagenes, archivo) for archivo in lista_archivos]
 
         # Evaluar las imágenes y obtener sus scores
-        evaluador = evaluators.Evaluators(imagenes_guardadas)
+        evaluador = evaluators.Evaluators([(ruta, Image.open(ruta).convert("RGB")) for ruta in rutas_imagenes])
         scores = evaluador.evalTenengradSobel()
-
-        # Combinar las imágenes con sus scores
-        imagenes_con_scores = list(zip(imagenes_guardadas, scores))
 
         # Ordenar las imágenes por segundo y seleccionar las mejores n por segundo
         imagenes_por_segundo = {}
-        for i, ((ruta, imagen), score) in enumerate(imagenes_con_scores):  # Desempaquetar correctamente
+        total_imagenes = len(rutas_imagenes)
+        for i, (ruta, score) in enumerate(zip(rutas_imagenes, scores)):
             segundo = i // fps_video
             if segundo not in imagenes_por_segundo:
                 imagenes_por_segundo[segundo] = []
-            imagenes_por_segundo[segundo].append((ruta, imagen, score))  # Agregar la tupla correcta
+            imagenes_por_segundo[segundo].append((ruta, score))
+
+            # Actualizar la barra de progreso
+            progreso = (i + 1) / total_imagenes * 100
+            ventana.after(0, actualizar_progreso, progressbar, progreso)
+            ventana.update_idletasks()  # Forzar la actualización de la interfaz
 
         # Conservar solo las mejores n imágenes por segundo
-        nuevas_imagenes = []
+        nuevas_rutas = []
         for segundo, imagenes in imagenes_por_segundo.items():
-            imagenes.sort(key=lambda x: x[2], reverse=True)  # Ordenar por score
-            nuevas_imagenes.extend(imagenes[:n])  # Conservar las mejores n
+            imagenes.sort(key=lambda x: x[1], reverse=True)  # Ordenar por score
+            nuevas_rutas.extend([ruta for ruta, _ in imagenes[:n]])  # Conservar las mejores n
 
         # Crear una carpeta para guardar las mejores tomas
-        carpeta_mejores_tomas = os.path.join(os.path.dirname(imagenes_guardadas[0][0]), "mejores_tomas")
+        carpeta_mejores_tomas = os.path.join(ruta_imagenes, "input")
         os.makedirs(carpeta_mejores_tomas, exist_ok=True)
 
-        # Copiar las mejores imágenes a la nueva carpeta y actualizar la lista
-        nuevas_rutas_imagenes = []
-        for ruta, imagen, _ in nuevas_imagenes:
+        # Copiar las mejores imágenes a la nueva carpeta
+        for ruta in nuevas_rutas:
             nombre_archivo = os.path.basename(ruta)
-            nueva_ruta = os.path.join(carpeta_mejores_tomas, nombre_archivo)
-            shutil.copy(ruta, nueva_ruta)  # Copiar la imagen a la nueva carpeta
-            nuevas_rutas_imagenes.append((nueva_ruta, imagen))  # Actualizar la lista con las nuevas rutas
+            shutil.copy(ruta, os.path.join(carpeta_mejores_tomas, nombre_archivo))
 
-        # Actualizar la lista de imágenes cargadas
-        imagenes_guardadas[:] = nuevas_rutas_imagenes
+        # Actualizar la ruta de la carpeta de imágenes
+        ruta_imagenes = carpeta_mejores_tomas
 
-        # Actualizar la interfaz
-        label_contador.config(text=f"Imágenes cargadas: {len(imagenes_guardadas)}")
-        progressbar["value"] = 100  # Completar la barra de progreso
-        ventana.update_idletasks()
+        # Actualizar el contador y la carpeta actual
+        ventana.after(0, actualizar_contador, label_contador, label_carpeta_actual)
 
-        messagebox.showinfo("Éxito", f"Se conservaron las mejores {n} imágenes por segundo en {carpeta_mejores_tomas}.")
+        ventana.after(0, messagebox.showinfo, "Éxito", f"Se conservaron las mejores {n} imágenes por segundo en {carpeta_mejores_tomas}.")
     except Exception as e:
-        messagebox.showerror("Error", f"No se pudo filtrar las imágenes: {e}")
+        ventana.after(0, messagebox.showerror, "Error", f"No se pudo filtrar las imágenes: {e}")
+    finally:
+        # Rehabilitar el botón al finalizar, ya sea con éxito o con error
+        ventana.after(0, btn_extraer.config, {"state": "normal"})
 
 def main():
     global ventana
@@ -205,6 +299,10 @@ def main():
 
     frame_botones = Frame(ventana, bg="#1E1E1E")
     frame_botones.place(relx=0.5, rely=0.5, anchor="center")
+
+    # Label para mostrar la carpeta actual
+    label_carpeta_actual = Label(frame_botones, text="Carpeta actual: Ninguna", font=("Arial", 12), fg="white", bg="#1E1E1E")
+    label_carpeta_actual.pack(pady=5)
 
     # Barra de progreso
     progressbar = ttk.Progressbar(frame_botones, orient="horizontal", length=300, mode="determinate")
@@ -221,31 +319,53 @@ def main():
     # Botón para cargar carpeta
     btn_carpeta = Button(frame_carga, text="📁 Cargar Carpeta", width=20, height=2, fg="white", bg="#3A3A3A", relief="flat",
                      activebackground="#505050", font=("Arial", 12, "bold"),
-                     command=lambda: seleccionar_carpeta(filedialog.askdirectory(), label_contador, progressbar, entry_framerate))
+                     command=lambda: seleccionar_carpeta(label_contador, entry_framerate, label_carpeta_actual))
     btn_carpeta.pack(side="left", padx=10)
 
     # Botón para cargar video
     btn_video = Button(frame_carga, text="🎥 Cargar Video", width=20, height=2, fg="white", bg="#3A3A3A", relief="flat",
                    activebackground="#505050", font=("Arial", 12, "bold"),
-                   command=lambda: cargar_video(label_contador, progressbar, entry_framerate))
+                   command=lambda: cargar_video(label_contador, progressbar, entry_framerate, label_carpeta_actual))
     btn_video.pack(side="left", padx=10)
 
-    # Campo de texto para mejores imágenes por segundo
-    Label(frame_botones, text="Mejores imágenes por segundo:", font=("Arial", 14), fg="white", bg="#1E1E1E").pack(pady=5)
-    entry_n = Entry(frame_botones, font=("Arial", 14), bg="#3A3A3A", fg="white", insertbackground="white", width=10)
-    entry_n.pack(pady=5)
+    # Frame para los campos de texto y el botón de extraer mejores tomas
+    frame_opciones = Frame(frame_botones, bg="#1E1E1E")
+    frame_opciones.pack(pady=10)
+
+    # Texto y campo de texto para "Elegir las mejores _____ tomas cada _____ imágenes"
+    Label(frame_opciones, text="Elegir las mejores", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
+    entry_n = Entry(frame_opciones, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=5)
+    entry_n.pack(side="left", padx=5)
     entry_n.insert(0, "5")
 
-    # Campo de texto para el framerate
-    Label(frame_botones, text="Framerate del video:", font=("Arial", 14), fg="white", bg="#1E1E1E").pack(pady=5)
-    entry_framerate = Entry(frame_botones, font=("Arial", 14), bg="#3A3A3A", fg="white", insertbackground="white", width=10)
-    entry_framerate.pack(pady=5)
+    Label(frame_opciones, text="tomas cada", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
+    entry_framerate = Entry(frame_opciones, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=5)
+    entry_framerate.pack(side="left", padx=5)
+    entry_framerate.insert(0, "30")
+
+    Label(frame_opciones, text="imágenes", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
 
     # Botón para extraer mejores tomas (más largo y grande)
     btn_extraer = Button(frame_botones, text="⭐ Extraer Mejores Tomas ⭐", width=30, height=2, fg="white", bg="#3A3A3A", relief="flat",
                      activebackground="#505050", font=("Arial", 14, "bold"),
-                     command=lambda: extraer_mejores_tomas(entry_n, label_contador, progressbar, entry_framerate))
+                     command=lambda: extraer_mejores_tomas(entry_n, label_contador, entry_framerate, label_carpeta_actual, progressbar, btn_extraer))
     btn_extraer.pack(pady=20)
+
+    # Frame para el campo de texto y el botón de prueba del entorno
+    frame_prueba = Frame(frame_botones, bg="#1E1E1E")
+    frame_prueba.pack(pady=10)
+
+    # Campo de texto para el nombre del entorno
+    Label(frame_prueba, text="Nombre del entorno (conda):", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
+    entry_entorno = Entry(frame_prueba, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=20)
+    entry_entorno.pack(side="left", padx=5)
+    entry_entorno.insert(0, "gaussian_splatting_v2")  # Valor predeterminado
+
+    # Botón para probar el entorno
+    btn_probar = Button(frame_prueba, text="Probar Entorno", width=15, height=1, fg="white", bg="#3A3A3A", relief="flat",
+                     activebackground="#505050", font=("Arial", 12, "bold"),
+                     command=lambda: threading.Thread(target=probar_entorno_conda, args=(entry_entorno.get(),btn_probar), daemon=True).start())
+    btn_probar.pack(side="left", padx=5)
 
     ventana.mainloop()
 
