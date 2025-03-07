@@ -11,9 +11,7 @@ from PIL import Image
 ruta_imagenes = None
 
 def actualizar_contador(label_contador, label_carpeta_actual):
-    """
-    Cuenta las imágenes en la carpeta actual y actualiza el contador en la interfaz.
-    """
+
     global ruta_imagenes
 
     if not ruta_imagenes or not os.path.exists(ruta_imagenes):
@@ -30,9 +28,7 @@ def actualizar_contador(label_contador, label_carpeta_actual):
     label_carpeta_actual.config(text=f"Carpeta actual: {ruta_imagenes}")
 
 def probar_entorno_conda(nombre_entorno, btn_probar):
-    """
-    Prueba si el entorno de Conda se carga correctamente.
-    """
+
     try:
 
         # Deshabilitar el botón para evitar múltiples clics
@@ -57,9 +53,7 @@ def probar_entorno_conda(nombre_entorno, btn_probar):
         ventana.after(0, btn_probar.config, {"state": "normal"})
 
 def seleccionar_carpeta(label_contador, entry_framerate, label_carpeta_actual):
-    """
-    Selecciona una carpeta y actualiza la interfaz.
-    """
+
     global ruta_imagenes
 
     # Pedir al usuario que seleccione una carpeta
@@ -77,9 +71,7 @@ def seleccionar_carpeta(label_contador, entry_framerate, label_carpeta_actual):
     actualizar_contador(label_contador, label_carpeta_actual)
 
 def cargar_video(label_contador, progressbar, entry_framerate, label_carpeta_actual):
-    """
-    Carga un video y extrae los frames en segundo plano.
-    """
+
     global ruta_imagenes
 
     # Pedir al usuario que seleccione un video
@@ -95,9 +87,7 @@ def cargar_video(label_contador, progressbar, entry_framerate, label_carpeta_act
     ).start()
 
 def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, label_carpeta_actual):
-    """
-    Extrae los frames de un video en segundo plano.
-    """
+
     global ruta_imagenes
 
     try:
@@ -151,16 +141,12 @@ def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, lab
         ventana.after(0, messagebox.showerror, "Error", f"No se pudo extraer los frames: {e}")
 
 def actualizar_progreso(progressbar, valor):
-    """
-    Actualiza la barra de progreso.
-    """
+
     progressbar["value"] = valor
     ventana.update_idletasks()
 
 def obtener_rotacion_video(ruta_video):
-    """
-    Obtiene el código de rotación del video a partir de sus metadatos.
-    """
+
     try:
         import ffmpeg  # Necesitas instalar ffmpeg-python: pip install ffmpeg-python
 
@@ -178,9 +164,7 @@ def obtener_rotacion_video(ruta_video):
         return None
 
 def rotar_frame(frame, rotation_code):
-    """
-    Rota el frame según el código de rotación.
-    """
+
     if rotation_code == 90:
         return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
     elif rotation_code == 180:
@@ -191,9 +175,7 @@ def rotar_frame(frame, rotation_code):
         return frame
 
 def extraer_mejores_tomas(entry_n, label_contador, entry_framerate, label_carpeta_actual, progressbar, btn_extraer):
-    """
-    Extrae las mejores tomas en segundo plano.
-    """
+
     global ruta_imagenes
 
     if not ruta_imagenes:
@@ -231,9 +213,7 @@ def extraer_mejores_tomas(entry_n, label_contador, entry_framerate, label_carpet
     ).start()
 
 def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, progressbar, btn_extraer):
-    """
-    Procesa las mejores tomas en segundo plano.
-    """
+
     global ruta_imagenes
 
     try:
@@ -289,6 +269,7 @@ def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, p
         ventana.after(0, btn_extraer.config, {"state": "normal"})
 
 def main():
+    
     global ventana
     print("Inicializando interfaz gráfica...")
 
