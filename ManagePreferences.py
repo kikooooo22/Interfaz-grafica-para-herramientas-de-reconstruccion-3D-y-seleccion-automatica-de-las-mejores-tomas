@@ -4,22 +4,22 @@ import os
 class Preferences:
     def __init__(self):
 
-        self.path_tool = ""
-        self.environment_name = ""
+        self.preferences = {
+            "path_tool": "",
+            "environment_name": ""
+        }
 
-    def update_values(self, environment_name, path_tool):
+    def update(self, **kwargs):
 
-        self.environment_name = environment_name
-        self.path_tool = path_tool
+        self.preferences.update(kwargs)
 
-    def save(self, archivo="userPreferences.json"):
+    def save(self, file="userPreferences.json"):
 
-        with open(archivo, "w") as archivo:
-            json.dump(self.__dict__, archivo)
+        with open(file, "w") as f:
+            json.dump(self.preferences, f)
 
-    def load(self, archivo="userPreferences.json"):
+    def load(self, file="userPreferences.json"):
 
-        if os.path.exists(archivo):
-            with open(archivo, "r") as archivo:
-                datos = json.load(archivo)
-                self.__dict__.update(datos)
+        if os.path.exists(file):
+            with open(file, "r") as f:
+                self.preferences.update(json.load(f))

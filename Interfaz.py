@@ -347,7 +347,7 @@ def main():
     Label(frame_prueba, text="Nombre del entorno (conda):", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
     entry_entorno = Entry(frame_prueba, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=20)
     entry_entorno.pack(side="left", padx=5)
-    entry_entorno.insert(0, preferences.environment_name)  # Valor predeterminado
+    entry_entorno.insert(0, preferences.preferences["environment_name"])  # Valor predeterminado
 
     # Botón para probar el entorno
     btn_probar = Button(frame_prueba, text="Probar Entorno", width=15, height=1, fg="white", bg="#3A3A3A", relief="flat",
@@ -363,13 +363,13 @@ def main():
     Label(frame_ruta_herramienta, text="Ruta de la herramienta:", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
     entry_ruta_herramienta = Entry(frame_ruta_herramienta, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=40)
     entry_ruta_herramienta.pack(side="left", padx=5)
-    entry_ruta_herramienta.insert(0, preferences.path_tool)
+    entry_ruta_herramienta.insert(0, preferences.preferences["path_tool"])
 
     # Guardar preferencias al cerrar la ventana
     ventana.protocol("WM_DELETE_WINDOW", lambda: [
-        preferences.update_values(
-            entry_entorno.get(),
-            entry_ruta_herramienta.get()
+        preferences.update(
+            environment_name=entry_entorno.get(),
+            path_tool=entry_ruta_herramienta.get()
         ),
         preferences.save(), 
         ventana.destroy() 
