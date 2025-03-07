@@ -1,11 +1,13 @@
 import os
 import subprocess
 import cv2
-import evaluators
 import shutil
 import threading 
 from tkinter import ttk, Tk, Button, Frame, Label, filedialog, messagebox, Entry
 from PIL import Image
+
+from Evaluators import Evaluators
+from ManagePreferences import Preferences
 
 # Variable global para almacenar la ruta de la carpeta de imágenes
 ruta_imagenes = None
@@ -223,7 +225,7 @@ def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, p
         rutas_imagenes = [os.path.join(ruta_imagenes, archivo) for archivo in lista_archivos]
 
         # Evaluar las imágenes y obtener sus scores
-        evaluador = evaluators.Evaluators([(ruta, Image.open(ruta).convert("RGB")) for ruta in rutas_imagenes])
+        evaluador = Evaluators([(ruta, Image.open(ruta).convert("RGB")) for ruta in rutas_imagenes])
         scores = evaluador.evalTenengradSobel()
 
         # Ordenar las imágenes por segundo y seleccionar las mejores n por segundo
@@ -271,12 +273,17 @@ def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, p
 def main():
     
     global ventana
+
+    preferences = Preferences()
+
+    preferences.load()
+
     print("Inicializando interfaz gráfica...")
 
     ventana = Tk()
     ventana.title("Visualizador de Imágenes")
-    ventana.geometry("600x500")  # Ventana más grande
-    ventana.configure(bg="#1E1E1E")  # Fondo oscuro
+    ventana.geometry("600x600") 
+    ventana.configure(bg="#1E1E1E") 
 
     frame_botones = Frame(ventana, bg="#1E1E1E")
     frame_botones.place(relx=0.5, rely=0.5, anchor="center")
@@ -340,13 +347,33 @@ def main():
     Label(frame_prueba, text="Nombre del entorno (conda):", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
     entry_entorno = Entry(frame_prueba, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=20)
     entry_entorno.pack(side="left", padx=5)
-    entry_entorno.insert(0, "gaussian_splatting_v2")  # Valor predeterminado
+    entry_entorno.insert(0, preferences.environment_name)  # Valor predeterminado
 
     # Botón para probar el entorno
     btn_probar = Button(frame_prueba, text="Probar Entorno", width=15, height=1, fg="white", bg="#3A3A3A", relief="flat",
                      activebackground="#505050", font=("Arial", 12, "bold"),
                      command=lambda: threading.Thread(target=probar_entorno_conda, args=(entry_entorno.get(),btn_probar), daemon=True).start())
     btn_probar.pack(side="left", padx=5)
+
+    # Frame para la ruta de la herramienta
+    frame_ruta_herramienta = Frame(frame_botones, bg="#1E1E1E")
+    frame_ruta_herramienta.pack(pady=10)
+
+    # Label y campo de texto para la ruta de la herramienta
+    Label(frame_ruta_herramienta, text="Ruta de la herramienta:", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
+    entry_ruta_herramienta = Entry(frame_ruta_herramienta, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=40)
+    entry_ruta_herramienta.pack(side="left", padx=5)
+    entry_ruta_herramienta.insert(0, preferences.path_tool)
+
+    # Guardar preferencias al cerrar la ventana
+    ventana.protocol("WM_DELETE_WINDOW", lambda: [
+        preferences.update_values(
+            entry_entorno.get(),
+            entry_ruta_herramienta.get()
+        ),
+        preferences.save(), 
+        ventana.destroy() 
+    ])
 
     ventana.mainloop()
 
