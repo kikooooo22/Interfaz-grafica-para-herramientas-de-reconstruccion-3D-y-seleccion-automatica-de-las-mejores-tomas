@@ -1,20 +1,10 @@
 import cv2
 import numpy as np
-from dom import DOM
 from tkinter import messagebox
 
 class Evaluators:
     def __init__(self, imagenes_cargadas):
         self.imagenes_cargadas = imagenes_cargadas
-
-    def evalDOM(self):
-        if not self.imagenes_cargadas:
-            messagebox.showwarning("Atención", "No hay imágenes cargadas.")
-            return []
-
-        domEval = DOM()
-        scores = [domEval.get_sharpness(cv2.imread(ruta)) for ruta, _ in self.imagenes_cargadas]
-        return scores
 
     def evalTenengrad(self):
         if not self.imagenes_cargadas:
