@@ -3,7 +3,7 @@ import subprocess
 import cv2
 import shutil
 import threading 
-from tkinter import ttk, Tk, Button, Frame, Label, filedialog, messagebox, Entry
+from tkinter import Tk, Button, Frame, Label, Entry, BooleanVar, Checkbutton, filedialog, messagebox, ttk
 from PIL import Image
 
 from Evaluators import Evaluators
@@ -11,14 +11,15 @@ from ManagePreferences import Preferences
 
 # Variable global para almacenar la ruta de la carpeta de imágenes
 ruta_imagenes = None
+label_advertencia = None
 
 def actualizar_contador(label_contador, label_carpeta_actual):
-
-    global ruta_imagenes
+    global ruta_imagenes, label_advertencia
 
     if not ruta_imagenes or not os.path.exists(ruta_imagenes):
         label_contador.config(text="Imágenes cargadas: 0")
         label_carpeta_actual.config(text="Carpeta actual: Ninguna")
+        label_advertencia.config(text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'")
         return
 
     # Contar las imágenes en la carpeta
@@ -28,6 +29,13 @@ def actualizar_contador(label_contador, label_carpeta_actual):
     # Actualizar el contador de imágenes
     label_contador.config(text=f"Imágenes cargadas: {len(lista_archivos)}")
     label_carpeta_actual.config(text=f"Carpeta actual: {ruta_imagenes}")
+
+    # Verificar si la carpeta 'input' existe
+    ruta_input = os.path.join(ruta_imagenes, "input")
+    if os.path.exists(ruta_input) and os.path.isdir(ruta_input):
+        label_advertencia.config(text="Carpeta 'input' encontrada", fg="green")
+    else:
+        label_advertencia.config(text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", fg="red")
 
 def probar_entorno_conda(nombre_entorno, btn_probar):
 
@@ -56,11 +64,11 @@ def probar_entorno_conda(nombre_entorno, btn_probar):
 
 def seleccionar_carpeta(label_contador, entry_framerate, label_carpeta_actual):
 
-    global ruta_imagenes
+    global ruta_imagenes, label_advertencia
 
     # Pedir al usuario que seleccione una carpeta
     carpeta = filedialog.askdirectory()
-    if not carpeta:  # Si el usuario cancela, no hacer nada
+    if not carpeta: 
         return
 
     # Limpiar el campo de framerate al cargar una carpeta
@@ -72,25 +80,33 @@ def seleccionar_carpeta(label_contador, entry_framerate, label_carpeta_actual):
     # Actualizar el contador y la carpeta actual
     actualizar_contador(label_contador, label_carpeta_actual)
 
+def seleccionar_carpeta_herramienta(entry_widget):
+
+    carpeta_seleccionada = filedialog.askdirectory() 
+    if carpeta_seleccionada: 
+        entry_widget.delete(0, "end") 
+        entry_widget.insert(0, carpeta_seleccionada)
+
 def cargar_video(label_contador, progressbar, entry_framerate, label_carpeta_actual):
 
     global ruta_imagenes
 
     # Pedir al usuario que seleccione un video
     ruta_video = filedialog.askopenfilename(filetypes=[("Video files", "*.mp4 *.avi *.mkv")])
-    if not ruta_video:  # Si el usuario cancela, no hacer nada
+    if not ruta_video: 
         return
 
     # Ejecutar la extracción de frames en un hilo separado
     threading.Thread(
         target=extraer_frames,
         args=(ruta_video, label_contador, progressbar, entry_framerate, label_carpeta_actual),
-        daemon=True  # El hilo se detendrá cuando se cierre la aplicación
+        # El hilo se detendrá cuando se cierre la aplicación
+        daemon=True 
     ).start()
 
 def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, label_carpeta_actual):
 
-    global ruta_imagenes
+    global ruta_imagenes, label_advertencia
 
     try:
         # Crear una carpeta para guardar los frames
@@ -99,7 +115,8 @@ def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, lab
 
         # Extraer todos los frames del video
         cap = cv2.VideoCapture(ruta_video)
-        fps_video = int(cap.get(cv2.CAP_PROP_FPS))  # Obtener los FPS del video
+        # Obtener los FPS del video
+        fps_video = int(cap.get(cv2.CAP_PROP_FPS))
 
         # Mostrar el framerate en el campo de texto
         ventana.after(0, entry_framerate.delete, 0, "end")
@@ -110,7 +127,9 @@ def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, lab
 
         frame_count = 0
         saved_count = 0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Total de frames en el video
+
+        # Total de frames en el video
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -138,7 +157,7 @@ def extraer_frames(ruta_video, label_contador, progressbar, entry_framerate, lab
         ruta_imagenes = carpeta_frames
 
         # Actualizar el contador y la carpeta actual
-        ventana.after(0, actualizar_contador, label_contador, label_carpeta_actual)
+        ventana.after(0, actualizar_contador, label_contador, label_carpeta_actual, label_advertencia)
     except Exception as e:
         ventana.after(0, messagebox.showerror, "Error", f"No se pudo extraer los frames: {e}")
 
@@ -150,7 +169,7 @@ def actualizar_progreso(progressbar, valor):
 def obtener_rotacion_video(ruta_video):
 
     try:
-        import ffmpeg  # Necesitas instalar ffmpeg-python: pip install ffmpeg-python
+        import ffmpeg 
 
         # Obtener los metadatos del video
         metadata = ffmpeg.probe(ruta_video)
@@ -185,18 +204,20 @@ def extraer_mejores_tomas(entry_n, label_contador, entry_framerate, label_carpet
         return
 
     # Deshabilitar el botón para evitar múltiples clics
-    btn_extraer.config(state="disabled")
+    ventana.after(0, btn_extraer.config, {"state": "disabled"})
 
     # Obtener el número de mejores imágenes por segundo
     try:
         n = int(entry_n.get())
         if n <= 0:
             ventana.after(0, messagebox.showerror, "Error", "El número de imágenes por segundo debe ser mayor que 0.")
-            btn_extraer.config(state="normal")  # Rehabilitar el botón en caso de error
+            # Rehabilitar el botón en caso de error
+            ventana.after(0, btn_extraer.config, {"state": "normal"}) 
             return
     except ValueError:
         ventana.after(0, messagebox.showerror, "Error", "El valor ingresado no es válido.")
-        btn_extraer.config(state="normal")  # Rehabilitar el botón en caso de error
+        # Rehabilitar el botón en caso de error
+        ventana.after(0, btn_extraer.config, {"state": "normal"})
         return
 
     # Obtener los FPS del video desde el campo de texto
@@ -204,19 +225,21 @@ def extraer_mejores_tomas(entry_n, label_contador, entry_framerate, label_carpet
         fps_video = int(entry_framerate.get()) if entry_framerate.get() else 30
     except ValueError:
         ventana.after(0, messagebox.showerror, "Error", "El framerate ingresado no es válido.")
-        btn_extraer.config(state="normal")  # Rehabilitar el botón en caso de error
+        # Rehabilitar el botón en caso de error
+        ventana.after(0, btn_extraer.config, {"state": "normal"})
         return
 
     # Ejecutar la extracción de mejores tomas en un hilo separado
     threading.Thread(
         target=procesar_mejores_tomas,
         args=(n, fps_video, label_contador, label_carpeta_actual, progressbar, btn_extraer),
-        daemon=True  # El hilo se detendrá cuando se cierre la aplicación
+        # Rehabilitar el botón en caso de error
+        daemon=True 
     ).start()
 
 def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, progressbar, btn_extraer):
 
-    global ruta_imagenes
+    global ruta_imagenes, label_advertencia
 
     try:
         # Cargar las imágenes desde la carpeta
@@ -240,13 +263,16 @@ def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, p
             # Actualizar la barra de progreso
             progreso = (i + 1) / total_imagenes * 100
             ventana.after(0, actualizar_progreso, progressbar, progreso)
-            ventana.update_idletasks()  # Forzar la actualización de la interfaz
+             # Forzar la actualización de la interfaz
+            ventana.update_idletasks() 
 
         # Conservar solo las mejores n imágenes por segundo
         nuevas_rutas = []
         for segundo, imagenes in imagenes_por_segundo.items():
-            imagenes.sort(key=lambda x: x[1], reverse=True)  # Ordenar por score
-            nuevas_rutas.extend([ruta for ruta, _ in imagenes[:n]])  # Conservar las mejores n
+            # Ordenar por score
+            imagenes.sort(key=lambda x: x[1], reverse=True)  
+            # Conservar las mejores n
+            nuevas_rutas.extend([ruta for ruta, _ in imagenes[:n]])  
 
         # Crear una carpeta para guardar las mejores tomas
         carpeta_mejores_tomas = os.path.join(ruta_imagenes, "input")
@@ -261,7 +287,7 @@ def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, p
         ruta_imagenes = carpeta_mejores_tomas
 
         # Actualizar el contador y la carpeta actual
-        ventana.after(0, actualizar_contador, label_contador, label_carpeta_actual)
+        ventana.after(0, actualizar_contador, label_contador, label_carpeta_actual, label_advertencia)
 
         ventana.after(0, messagebox.showinfo, "Éxito", f"Se conservaron las mejores {n} imágenes por segundo en {carpeta_mejores_tomas}.")
     except Exception as e:
@@ -270,9 +296,71 @@ def procesar_mejores_tomas(n, fps_video, label_contador, label_carpeta_actual, p
         # Rehabilitar el botón al finalizar, ya sea con éxito o con error
         ventana.after(0, btn_extraer.config, {"state": "normal"})
 
+def ejecutar_colmap(ruta_imagenes, entry_entorno, entry_ruta_herramienta, chkbtn_resize, botones, btn_colmap):
+    
+    # Verificar si se ha seleccionado una carpeta
+    if not ruta_imagenes:
+        messagebox.showerror("Error", "No se ha seleccionado una carpeta.")
+        return
+
+    # Verificar si la carpeta seleccionada existe
+    if not os.path.exists(ruta_imagenes):
+        messagebox.showerror("Error", f"La carpeta seleccionada no existe: {ruta_imagenes}")
+        return
+
+    # Verificar si existe una carpeta 'input' dentro de la carpeta seleccionada
+    ruta_input = os.path.join(ruta_imagenes, "input")
+    if not os.path.exists(ruta_input) or not os.path.isdir(ruta_input):
+        messagebox.showerror("Error", f"No se encontró la carpeta 'input' en: {ruta_imagenes}")
+        return
+
+    # Deshabilitar todos los botones
+    for boton in botones:
+        ventana.after(0, boton.config, {"state": "disabled"})
+    ventana.after(0, btn_colmap.config, {"state": "disabled"})
+
+    try:
+        # Obtener los valores de los campos de entrada
+        env_name = entry_entorno.get()
+        ruta_herramienta = entry_ruta_herramienta.get()
+
+        # Construir el comando
+        comando = f'conda run -n {env_name} py {ruta_herramienta}/convert.py -s {ruta_imagenes}'
+        if chkbtn_resize.get():
+            comando += " --resize"
+
+        # Ejecutar el comando de COLMAP
+        print("Ejecutando COLMAP...")  # Mensaje de depuración
+        proceso = subprocess.run(comando, shell=True, capture_output=True, text=True)
+
+        # Mostrar la salida y los errores
+        if proceso.stdout:
+            print("Salida de COLMAP:", proceso.stdout)  # Mostrar en la consola
+        if proceso.stderr:
+            print("Errores de COLMAP:", proceso.stderr)  # Mostrar en la consola
+
+        # Mostrar un mensaje de éxito
+        messagebox.showinfo("Éxito", "Proceso de COLMAP completado.")
+    except Exception as e:
+        # Mostrar un mensaje de error
+        messagebox.showerror("Error", f"No se pudo ejecutar el comando: {e}")
+    finally:
+        # Rehabilitar todos los botones
+        for boton in botones:
+            ventana.after(0, boton.config, {"state": "normal"})
+        ventana.after(0, btn_colmap.config, {"state": "normal"})
+
+def habilitar_botones(botones, btn_colmap):
+    print("Rehabilitando botones...") 
+    for boton in botones:
+        ventana.after(0, boton.config, {"state": "normal"})
+    ventana.after(0, btn_colmap.config, {"state": "normal"})
+    
+
 def main():
     
-    global ventana
+    global ventana, btn_carpeta, btn_video, btn_extraer, btn_probar, btn_colmap, btn_seleccionar_carpeta
+    global label_advertencia
 
     preferences = Preferences()
 
@@ -287,6 +375,10 @@ def main():
 
     frame_botones = Frame(ventana, bg="#1E1E1E")
     frame_botones.place(relx=0.5, rely=0.5, anchor="center")
+
+    # Declaramos label de advertencia, pero aun no lo metemos
+    label_advertencia = Label(frame_botones, text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", 
+          font=("Arial", 12), fg="red", bg="#1E1E1E")
 
     # Label para mostrar la carpeta actual
     label_carpeta_actual = Label(frame_botones, text="Carpeta actual: Ninguna", font=("Arial", 12), fg="white", bg="#1E1E1E")
@@ -347,7 +439,7 @@ def main():
     Label(frame_prueba, text="Nombre del entorno (conda):", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
     entry_entorno = Entry(frame_prueba, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=20)
     entry_entorno.pack(side="left", padx=5)
-    entry_entorno.insert(0, preferences.preferences["environment_name"])  # Valor predeterminado
+    entry_entorno.insert(0, preferences.preferences["environment_name"]) 
 
     # Botón para probar el entorno
     btn_probar = Button(frame_prueba, text="Probar Entorno", width=15, height=1, fg="white", bg="#3A3A3A", relief="flat",
@@ -361,9 +453,37 @@ def main():
 
     # Label y campo de texto para la ruta de la herramienta
     Label(frame_ruta_herramienta, text="Ruta de la herramienta:", font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
-    entry_ruta_herramienta = Entry(frame_ruta_herramienta, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=40)
+    entry_ruta_herramienta = Entry(frame_ruta_herramienta, font=("Arial", 12), bg="#3A3A3A", fg="white", insertbackground="white", width=30)
     entry_ruta_herramienta.pack(side="left", padx=5)
     entry_ruta_herramienta.insert(0, preferences.preferences["path_tool"])
+
+    # Botón para seleccionar carpeta
+    btn_seleccionar_carpeta = Button(frame_ruta_herramienta, text="📁", font=("Arial", 18), fg="white", bg="#3A3A3A", relief="flat",
+                                     activebackground="#505050", command=lambda: seleccionar_carpeta_herramienta(entry_ruta_herramienta))
+    btn_seleccionar_carpeta.pack(side="left", padx=5)
+
+    # Label en rojo para advertencia
+    label_advertencia.pack(pady=10)
+
+    # Frame para el Checkbutton y el botón de COLMAP
+    frame_colmap = Frame(frame_botones, bg="#1E1E1E")
+    frame_colmap.pack(pady=10)
+
+    # Variable para el estado del Checkbutton
+    chkbtn_resize = BooleanVar(value=False)  # Por defecto, no está activo
+
+    # Checkbutton para reescalar
+    check_reescalar = Checkbutton(frame_colmap, text="Reescalar (1/2, 1/4 y 1/8)", font=("Arial", 14), 
+                                  fg="white", bg="#1E1E1E", selectcolor="#3A3A3A", variable=chkbtn_resize)
+    check_reescalar.pack(side="left", padx=5)
+
+    # Lista de botones que se deshabilitarán durante la ejecución de COLMAP
+    botones = [btn_carpeta, btn_video, btn_extraer, btn_probar, btn_seleccionar_carpeta]
+
+    # Botón para ejecutar COLMAP
+    btn_colmap = Button(frame_colmap, text="📐COLMAP (convert)", font=("Arial", 14), fg="white", bg="#3A3A3A", relief="flat",
+                        activebackground="#505050", command=lambda: ejecutar_colmap(ruta_imagenes, entry_entorno, entry_ruta_herramienta, chkbtn_resize, botones, btn_colmap))
+    btn_colmap.pack(side="left", padx=5)
 
     # Guardar preferencias al cerrar la ventana
     ventana.protocol("WM_DELETE_WINDOW", lambda: [
