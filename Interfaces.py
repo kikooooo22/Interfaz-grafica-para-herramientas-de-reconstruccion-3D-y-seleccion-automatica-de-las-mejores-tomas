@@ -38,7 +38,7 @@ class MainApp:
         self.colmap_frame.pack(fill="both", expand=True)
         
         # Frame Gaussian Splatting (inicialmente oculto)
-        self.gs_frame = tk.Frame(self.main_frame, bg="#252526")
+        self.gs_frame = tk.Frame(self.main_frame, bg="#1E1E1E")
         
         # Botón de alternancia derecho (para COLMAP)
         self.toggle_btn_right = tk.Button(self.main_frame, 
@@ -49,7 +49,7 @@ class MainApp:
                                         borderwidth=0,
                                         command=self.toggle_gs_panel)
         self.toggle_btn_right.place(relx=1, rely=0, anchor="ne", 
-                                width=60, relheight=1)
+                                width=80, relheight=1)
         
         # Botón de alternancia izquierdo (para GS, inicialmente oculto)
         self.toggle_btn_left = tk.Button(self.gs_frame,
@@ -78,13 +78,13 @@ class MainApp:
         self.colmap_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
         
         # Frame Gaussian Splatting (inicialmente oculto)
-        self.gs_frame = Frame(self.main_frame, bg="#252526")
+        self.gs_frame = Frame(self.main_frame, bg="#1E1E1E")
         
         # Botón de alternancia
         self.toggle_btn = Button(self.main_frame, text="> Gaussian Splatting", 
                             font=("Arial", 10, "bold"), fg="white", bg="#007ACC",
                             relief="flat", command=self.toggle_gs_panel)
-        self.toggle_btn.place(relx=0, rely=0.5, anchor="w", width=120, height=40)
+        self.toggle_btn.place(relx=0, rely=0.5, anchor="w", width=150, height=40)
         
         self.setup_colmap_interface()
         self.setup_gs_interface()
@@ -108,7 +108,6 @@ class MainApp:
         
         # Estilos personalizados
         style.configure('Toggle.TButton', background='#007ACC', font=('Arial', 14, 'bold'))
-        style.configure('GS.TFrame', background='#252526')
         style.configure('Warning.TLabel', foreground='red')
         style.configure('Success.TLabel', foreground='green')
         style.configure('Title.TLabel', font=('Arial', 18, 'bold'))
@@ -129,9 +128,15 @@ class MainApp:
                  background=[('active', '#1E1E1E')],
                  indicatorcolor=[('selected', '#007ACC'), ('!selected', '#3A3A3A')])
 
+    def toggle_gs_panel(self):
+        if self.gs_visible:
+            self.animate_panel_hide()
+        else:
+            self.animate_panel_show()
+
     def animate_panel_hide(self):
         self.gs_visible = False
-        self.toggle_btn_right.place(relx=1, rely=0, anchor="ne", width=60, relheight=1)
+        self.toggle_btn_right.place(relx=1, rely=0, anchor="ne", width=80, relheight=1)
         
         # Animación de deslizamiento
         for i in range(self.animation_speed + 1):
@@ -143,18 +148,11 @@ class MainApp:
         self.gs_frame.place_forget()
         self.toggle_btn_left.place_forget()
         self.colmap_frame.pack(fill="both", expand=True)
-    
-    def toggle_gs_panel(self):
-        if self.gs_visible:
-            self.animate_panel_hide()
-        else:
-            self.animate_panel_show()
 
     def animate_panel_show(self):
         self.gs_visible = True
         self.toggle_btn_right.place_forget()
-        self.toggle_btn_left.place(relx=0, rely=0, anchor="nw", 
-                                width=60, relheight=1)
+        self.toggle_btn_left.place(relx=0, rely=0, anchor="nw", width=80, relheight=1)
         
         # Posicionar el frame GS fuera de vista a la derecha
         self.gs_frame.place(relx=1, rely=0, 
@@ -167,6 +165,25 @@ class MainApp:
             self.gs_frame.place_configure(relx=relx)
             self.root.update()
             time.sleep(0.02)
+
+    def save_preferences(self):
+        prefs = {
+            # COLMAP
+            "path_tool": self.entry_ruta_herramienta.get(),
+            "environment_name": self.entry_entorno.get(),
+
+            # GS 
+            "s": self.entry_s.get(),
+            "m": self.entry_m.get(),
+            "resolution": int(self.combo_resolution.get()),
+            "iterations": int(self.entry_iterations.get()),
+            "save_iterations": self.entry_save_iterations.get(),
+            "optimizer_type": self.entry_optimizer.get(),
+            "antialiasing": self.antialiasing_var.get()
+        }
+        
+        self.preferences.update(**prefs)
+        self.preferences.save()
     
     def setup_colmap_interface(self):
         frame_botones = ttk.Frame(self.colmap_frame)
@@ -286,15 +303,58 @@ class MainApp:
                                    style='Highlight.TButton',
                                    command=self.ejecutar_colmap)
         self.btn_colmap.pack(side="left", padx=5)
-
-        
     
     def setup_gs_interface(self):
-        ttk.Label(self.gs_frame, text="Herramientas Gaussian Splatting", 
-                style='Title.TLabel').pack(pady=50)
+        # Frame principal para los componentes
+        main_frame = ttk.Frame(self.gs_frame)
+        main_frame.pack(fill="both", expand=True, padx=(100,20), pady=20)
         
-        ttk.Button(self.gs_frame, text="< Volver a COLMAP", 
-                 command=self.toggle_gs_panel).pack(pady=20)
+        # Frame para organizar en 2 columnas
+        form_frame = ttk.Frame(main_frame)
+        form_frame.pack(fill="x", padx=10, pady=10)
+        
+        # Configuración de grid
+        form_frame.columnconfigure(0, weight=1)
+        form_frame.columnconfigure(1, weight=3)
+        
+        # Componentes de Gaussian Splatting
+        ttk.Label(form_frame, text="Entrada:").grid(row=0, column=0, sticky="w", pady=5)
+        self.entry_s = ttk.Entry(form_frame)
+        self.entry_s.grid(row=0, column=1, sticky="ew", pady=5)
+        self.entry_s.insert(0, self.preferences.preferences.get("s", ""))
+        
+        ttk.Label(form_frame, text="Salida:").grid(row=1, column=0, sticky="w", pady=5)
+        self.entry_m = ttk.Entry(form_frame)
+        self.entry_m.grid(row=1, column=1, sticky="ew", pady=5)
+        self.entry_m.insert(0, self.preferences.preferences.get("m", ""))
+        
+        ttk.Label(form_frame, text="Resolución:").grid(row=2, column=0, sticky="w", pady=5)
+        self.combo_resolution = ttk.Combobox(form_frame, values=[1, 2, 4, 8])
+        self.combo_resolution.grid(row=2, column=1, sticky="ew", pady=5)
+        self.combo_resolution.set(self.preferences.preferences.get("resolution", 1))
+        
+        ttk.Label(form_frame, text="Iteraciones:").grid(row=3, column=0, sticky="w", pady=5)
+        self.entry_iterations = ttk.Entry(form_frame)
+        self.entry_iterations.grid(row=3, column=1, sticky="ew", pady=5)
+        self.entry_iterations.insert(0, self.preferences.preferences.get("iterations", ""))
+        
+        ttk.Label(form_frame, text="Guardar en las iteraciones:").grid(row=4, column=0, sticky="w", pady=5)
+        self.entry_save_iterations = ttk.Entry(form_frame)
+        self.entry_save_iterations.grid(row=4, column=1, sticky="ew", pady=5)
+        self.entry_save_iterations.insert(0, self.preferences.preferences.get("save_iterations", ""))
+        
+        ttk.Label(form_frame, text="Optimizador:").grid(row=5, column=0, sticky="w", pady=5)
+        self.entry_optimizer = ttk.Entry(form_frame)
+        self.entry_optimizer.grid(row=5, column=1, sticky="ew", pady=5)
+        self.entry_optimizer.insert(0, self.preferences.preferences.get("optimizer_type", ""))
+        
+        self.antialiasing_var = BooleanVar(value=self.preferences.preferences.get("antialiasing", False))
+        self.check_antialiasing = ttk.Checkbutton(
+            form_frame, 
+            text="Antialiasing", 
+            variable=self.antialiasing_var
+        )
+        self.check_antialiasing.grid(row=6, column=0, columnspan=2, sticky="w", pady=5)
         
     def actualizar_contador(self):
         if not self.ruta_imagenes or not os.path.exists(self.ruta_imagenes):
@@ -537,7 +597,12 @@ class MainApp:
                 self.root.after(0, lambda b=boton: b.config(state="normal"))
             self.root.after(0, lambda: self.btn_colmap.config(state="normal"))
 
+def on_close(self):
+    self.save_preferences()
+    self.root.destroy()
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = MainApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()
