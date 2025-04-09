@@ -9,20 +9,25 @@ from tkinter import ttk, Frame, Button, Label, Entry, BooleanVar, Checkbutton, f
 from PIL import Image
 
 from Evaluators import Evaluators
+from ManagePreferences import Preferences
 
 class MainApp:
-    def __init__(self, root, preferences):
+    def __init__(self, root):
         self.root = root
-        self.preferences = preferences
+        self.preferences = Preferences() 
+        self.preferences.load()       
         self.ruta_imagenes = None
         self.root.title("Visualizador de Imágenes")
         self.root.geometry("1000x700")
         self.root.configure(bg="#1E1E1E")
+
+        # Configurar estilos ttk
+        self.setup_styles()
         
         # Variables de estado
         self.gs_visible = False
         self.animation_speed = 5
-        self.panel_width = 0.25  # Ancho relativo de los paneles
+        self.panel_width = 1
         
         # Frame principal
         self.main_frame = tk.Frame(root, bg="#1E1E1E")
@@ -44,21 +49,21 @@ class MainApp:
                                         borderwidth=0,
                                         command=self.toggle_gs_panel)
         self.toggle_btn_right.place(relx=1, rely=0, anchor="ne", 
-                                  width=60, relheight=1)
+                                width=60, relheight=1)
         
         # Botón de alternancia izquierdo (para GS, inicialmente oculto)
         self.toggle_btn_left = tk.Button(self.gs_frame,
-                                       text="< COLMAP\nTools",
-                                       font=("Arial", 10, "bold"),
-                                       fg="white", bg="#007ACC",
-                                       relief="flat",
-                                       borderwidth=0,
-                                       command=self.toggle_gs_panel)
+                                    text="< COLMAP\nTools",
+                                    font=("Arial", 10, "bold"),
+                                    fg="white", bg="#007ACC",
+                                    relief="flat",
+                                    borderwidth=0,
+                                    command=self.toggle_gs_panel)
         
         # Configurar interfaces
         self.setup_colmap_interface()
         self.setup_gs_interface()
-    
+     
     def setup_ui(self):
         self.root.title("Visualizador de Imágenes")
         self.root.geometry("900x600")
@@ -77,172 +82,56 @@ class MainApp:
         
         # Botón de alternancia
         self.toggle_btn = Button(self.main_frame, text="> Gaussian Splatting", 
-                               font=("Arial", 10, "bold"), fg="white", bg="#007ACC",
-                               relief="flat", command=self.toggle_gs_panel)
+                            font=("Arial", 10, "bold"), fg="white", bg="#007ACC",
+                            relief="flat", command=self.toggle_gs_panel)
         self.toggle_btn.place(relx=0, rely=0.5, anchor="w", width=120, height=40)
         
         self.setup_colmap_interface()
         self.setup_gs_interface()
-    
-    def setup_colmap_interface(self):
-        frame_botones = Frame(self.colmap_frame, bg="#1E1E1E")
-        frame_botones.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Label de advertencia
-        self.label_advertencia = Label(frame_botones, 
-                                     text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", 
-                                     font=("Arial", 12), fg="red", bg="#1E1E1E")
-
-        # Label carpeta actual
-        self.label_carpeta_actual = Label(frame_botones, text="Carpeta actual: Ninguna", 
-                                        font=("Arial", 12), fg="white", bg="#1E1E1E")
-        self.label_carpeta_actual.pack(pady=5)
-
+    def setup_styles(self):
+        style = ttk.Style()
+        
+        # Configurar tema general
+        style.theme_use('clam')
+        
+        # Colores base
+        style.configure('.', background='#1E1E1E', foreground='white')
+        style.configure('TFrame', background='#1E1E1E')
+        style.configure('TLabel', background='#1E1E1E', foreground='white', font=('Arial', 14))
+        style.configure('TButton', background='#3A3A3A', foreground='white', 
+                       font=('Arial', 14, 'bold'), borderwidth=0, focusthickness=3, 
+                       focuscolor='none', padding=5)
+        style.map('TButton', 
+                 background=[('active', '#505050'), ('disabled', '#2A2A2A')],
+                 foreground=[('disabled', '#7A7A7A')])
+        
+        # Estilos personalizados
+        style.configure('Toggle.TButton', background='#007ACC', font=('Arial', 14, 'bold'))
+        style.configure('GS.TFrame', background='#252526')
+        style.configure('Warning.TLabel', foreground='red')
+        style.configure('Success.TLabel', foreground='green')
+        style.configure('Title.TLabel', font=('Arial', 18, 'bold'))
+        style.configure('Highlight.TButton', background='#007ACC', font=('Arial', 16, 'bold'))
+        style.configure('Icon.TButton', font=('Arial', 20))
+        
+        # Entradas
+        style.configure('TEntry', fieldbackground='#3A3A3A', foreground='white', 
+                        insertcolor='white', bordercolor='#505050', lightcolor='#505050')
+        
         # Barra de progreso
-        self.progressbar = ttk.Progressbar(frame_botones, orient="horizontal", 
-                                         length=300, mode="determinate")
-        self.progressbar.pack(pady=10)
-
-        # Contador de imágenes
-        self.label_contador = Label(frame_botones, text="Imágenes cargadas: 0", 
-                                  font=("Arial", 12), fg="white", bg="#1E1E1E")
-        self.label_contador.pack(pady=5)
-
-        # Frame botones de carga
-        frame_carga = Frame(frame_botones, bg="#1E1E1E")
-        frame_carga.pack(pady=10)
-
-        # Botón cargar carpeta
-        self.btn_carpeta = Button(frame_carga, text="📁 Cargar Carpeta", width=20, height=2,
-                                fg="white", bg="#3A3A3A", relief="flat",
-                                activebackground="#505050", font=("Arial", 12, "bold"),
-                                command=self.seleccionar_carpeta)
-        self.btn_carpeta.pack(side="left", padx=10)
-
-        # Botón cargar video
-        self.btn_video = Button(frame_carga, text="🎥 Cargar Video", width=20, height=2,
-                              fg="white", bg="#3A3A3A", relief="flat",
-                              activebackground="#505050", font=("Arial", 12, "bold"),
-                              command=self.cargar_video)
-        self.btn_video.pack(side="left", padx=10)
-
-        # Frame opciones
-        frame_opciones = Frame(frame_botones, bg="#1E1E1E")
-        frame_opciones.pack(pady=10)
-
-        # Campos para mejores tomas
-        Label(frame_opciones, text="Elegir las mejores", font=("Arial", 12), 
-             fg="white", bg="#1E1E1E").pack(side="left", padx=5)
+        style.configure('Horizontal.TProgressbar', background='#007ACC', troughcolor='#3A3A3A')
         
-        self.entry_n = Entry(frame_opciones, font=("Arial", 12), bg="#3A3A3A", 
-                           fg="white", insertbackground="white", width=5)
-        self.entry_n.pack(side="left", padx=5)
-        self.entry_n.insert(0, "5")
+        # Checkbutton
+        style.configure('TCheckbutton', background='#1E1E1E', foreground='white', 
+                       font=('Arial', 16))
+        style.map('TCheckbutton', 
+                 background=[('active', '#1E1E1E')],
+                 indicatorcolor=[('selected', '#007ACC'), ('!selected', '#3A3A3A')])
 
-        Label(frame_opciones, text="tomas cada", font=("Arial", 12), 
-             fg="white", bg="#1E1E1E").pack(side="left", padx=5)
-        
-        self.entry_framerate = Entry(frame_opciones, font=("Arial", 12), bg="#3A3A3A", 
-                                   fg="white", insertbackground="white", width=5)
-        self.entry_framerate.pack(side="left", padx=5)
-        self.entry_framerate.insert(0, "30")
-
-        Label(frame_opciones, text="imágenes", font=("Arial", 12), 
-             fg="white", bg="#1E1E1E").pack(side="left", padx=5)
-
-        # Botón extraer mejores tomas
-        self.btn_extraer = Button(frame_botones, text="⭐ Extraer Mejores Tomas ⭐", 
-                                width=30, height=2, fg="white", bg="#3A3A3A", 
-                                relief="flat", activebackground="#505050", 
-                                font=("Arial", 14, "bold"),
-                                command=self.extraer_mejores_tomas)
-        self.btn_extraer.pack(pady=20)
-
-        # Frame prueba entorno
-        frame_prueba = Frame(frame_botones, bg="#1E1E1E")
-        frame_prueba.pack(pady=10)
-
-        # Configuración entorno conda
-        Label(frame_prueba, text="Nombre del entorno (conda):", font=("Arial", 12), 
-             fg="white", bg="#1E1E1E").pack(side="left", padx=5)
-        
-        self.entry_entorno = Entry(frame_prueba, font=("Arial", 12), bg="#3A3A3A", 
-                                 fg="white", insertbackground="white", width=20)
-        self.entry_entorno.pack(side="left", padx=5)
-        self.entry_entorno.insert(0, self.preferences.preferences["environment_name"])
-
-        # Botón probar entorno
-        self.btn_probar = Button(frame_prueba, text="Probar Entorno", width=15, height=1,
-                               fg="white", bg="#3A3A3A", relief="flat",
-                               activebackground="#505050", font=("Arial", 12, "bold"),
-                               command=self.probar_entorno_conda)
-        self.btn_probar.pack(side="left", padx=5)
-
-        # Frame ruta herramienta
-        frame_ruta_herramienta = Frame(frame_botones, bg="#1E1E1E")
-        frame_ruta_herramienta.pack(pady=10)
-
-        # Configuración ruta herramienta
-        Label(frame_ruta_herramienta, text="Ruta de la herramienta:", 
-             font=("Arial", 12), fg="white", bg="#1E1E1E").pack(side="left", padx=5)
-        
-        self.entry_ruta_herramienta = Entry(frame_ruta_herramienta, font=("Arial", 12), 
-                                          bg="#3A3A3A", fg="white", 
-                                          insertbackground="white", width=30)
-        self.entry_ruta_herramienta.pack(side="left", padx=5)
-        self.entry_ruta_herramienta.insert(0, self.preferences.preferences["path_tool"])
-
-        # Botón seleccionar carpeta
-        self.btn_seleccionar_carpeta = Button(frame_ruta_herramienta, text="📁", 
-                                            font=("Arial", 18), fg="white", 
-                                            bg="#3A3A3A", relief="flat",
-                                            activebackground="#505050", 
-                                            command=self.seleccionar_carpeta_herramienta)
-        self.btn_seleccionar_carpeta.pack(side="left", padx=5)
-
-        # Label advertencia
-        self.label_advertencia.pack(pady=10)
-
-        # Frame COLMAP
-        frame_colmap = Frame(frame_botones, bg="#1E1E1E")
-        frame_colmap.pack(pady=10)
-
-        # Checkbutton reescalar
-        self.chkbtn_resize = BooleanVar(value=False)
-        self.check_reescalar = Checkbutton(frame_colmap, 
-                                          text="Reescalar (1/2, 1/4 y 1/8)", 
-                                          font=("Arial", 14), 
-                                          fg="white", bg="#1E1E1E", 
-                                          selectcolor="#3A3A3A", 
-                                          variable=self.chkbtn_resize)
-        self.check_reescalar.pack(side="left", padx=5)
-
-        # Lista de botones para deshabilitar
-        self.botones_colmap = [self.btn_carpeta, self.btn_video, self.btn_extraer, 
-                              self.btn_probar, self.btn_seleccionar_carpeta]
-
-        # Botón ejecutar COLMAP
-        self.btn_colmap = Button(frame_colmap, text="📐COLMAP (convert)", 
-                               font=("Arial", 14), fg="white", bg="#3A3A3A", 
-                               relief="flat", activebackground="#505050", 
-                               command=self.ejecutar_colmap)
-        self.btn_colmap.pack(side="left", padx=5)
-
-        # Separador inferior
-        ttk.Separator(self.colmap_frame, orient="horizontal").pack(fill="x", pady=20, side="bottom")
-    
-    def setup_gs_interface(self):
-        # Contenido básico para Gaussian Splatting
-        Label(self.gs_frame, text="Herramientas Gaussian Splatting", 
-             font=("Arial", 16), fg="white", bg="#252526").pack(pady=50)
-        
-        Button(self.gs_frame, text="< Volver a COLMAP", 
-              font=("Arial", 10), fg="white", bg="#3E3E40",
-              command=self.toggle_gs_panel).pack(pady=20)
-        
     def animate_panel_hide(self):
         self.gs_visible = False
-        self.toggle_btn_right.config(text="Gaussian\nSplatting >")
+        self.toggle_btn_right.place(relx=1, rely=0, anchor="ne", width=60, relheight=1)
         
         # Animación de deslizamiento
         for i in range(self.animation_speed + 1):
@@ -263,13 +152,13 @@ class MainApp:
 
     def animate_panel_show(self):
         self.gs_visible = True
-        self.toggle_btn_right.config(text="< Ocultar")
+        self.toggle_btn_right.place_forget()
         self.toggle_btn_left.place(relx=0, rely=0, anchor="nw", 
-                                  width=60, relheight=1)
+                                width=60, relheight=1)
         
         # Posicionar el frame GS fuera de vista a la derecha
         self.gs_frame.place(relx=1, rely=0, 
-                           relwidth=self.panel_width, relheight=1)
+                        relwidth=self.panel_width, relheight=1)
         self.colmap_frame.pack_forget()
         
         # Animación de deslizamiento
@@ -279,26 +168,153 @@ class MainApp:
             self.root.update()
             time.sleep(0.02)
     
-    # Métodos convertidos de funciones originales
+    def setup_colmap_interface(self):
+        frame_botones = ttk.Frame(self.colmap_frame)
+        frame_botones.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Label de advertencia
+        self.label_advertencia = ttk.Label(frame_botones, 
+                                    text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", 
+                                    style='Warning.TLabel')
+
+        # Label carpeta actual
+        self.label_carpeta_actual = ttk.Label(frame_botones, text="Carpeta actual: Ninguna")
+        self.label_carpeta_actual.pack(pady=5)
+
+        # Barra de progreso
+        self.progressbar = ttk.Progressbar(frame_botones, orient="horizontal", 
+                                        length=300, mode="determinate",
+                                        style='Horizontal.TProgressbar')
+        self.progressbar.pack(pady=10)
+
+        # Contador de imágenes
+        self.label_contador = ttk.Label(frame_botones, text="Imágenes cargadas: 0")
+        self.label_contador.pack(pady=5)
+
+        # Frame botones de carga
+        frame_carga = ttk.Frame(frame_botones)
+        frame_carga.pack(pady=10)
+
+        # Botón cargar carpeta
+        self.btn_carpeta = ttk.Button(frame_carga, text="📁 Cargar Carpeta",
+                                    command=self.seleccionar_carpeta)
+        self.btn_carpeta.pack(side="left", padx=10)
+
+        # Botón cargar video
+        self.btn_video = ttk.Button(frame_carga, text="🎥 Cargar Video",
+                                  command=self.cargar_video)
+        self.btn_video.pack(side="left", padx=10)
+
+        # Frame opciones
+        frame_opciones = ttk.Frame(frame_botones)
+        frame_opciones.pack(pady=10)
+
+        # Campos para mejores tomas
+        ttk.Label(frame_opciones, text="Elegir las mejores").pack(side="left", padx=5)
+        
+        self.entry_n = ttk.Entry(frame_opciones, width=5, font=('Arial', 14))
+        self.entry_n.pack(side="left", padx=5)
+        self.entry_n.insert(0, "5")
+
+        ttk.Label(frame_opciones, text="tomas cada").pack(side="left", padx=5)
+        
+        self.entry_framerate = ttk.Entry(frame_opciones, width=5, font=('Arial', 14))
+        self.entry_framerate.pack(side="left", padx=5)
+        self.entry_framerate.insert(0, "30")
+
+        ttk.Label(frame_opciones, text="imágenes").pack(side="left", padx=5)
+
+        # Botón extraer mejores tomas
+        self.btn_extraer = ttk.Button(frame_botones, text="⭐ Extraer Mejores Tomas ⭐", 
+                                    style='Highlight.TButton',
+                                    command=self.extraer_mejores_tomas)
+        self.btn_extraer.pack(pady=20)
+
+        # Frame prueba entorno
+        frame_prueba = ttk.Frame(frame_botones)
+        frame_prueba.pack(pady=10)
+
+        # Configuración entorno conda
+        ttk.Label(frame_prueba, text="Nombre del entorno (conda):").pack(side="left", padx=5)
+        
+        self.entry_entorno = ttk.Entry(frame_prueba, width=20, font=('Arial', 14))
+        self.entry_entorno.pack(side="left", padx=5)
+        self.entry_entorno.insert(0, self.preferences.preferences["environment_name"])
+
+        # Botón probar entorno
+        self.btn_probar = ttk.Button(frame_prueba, text="Probar Entorno",
+                                   command=self.probar_entorno_conda)
+        self.btn_probar.pack(side="left", padx=5)
+
+        # Frame ruta herramienta
+        frame_ruta_herramienta = ttk.Frame(frame_botones)
+        frame_ruta_herramienta.pack(pady=10)
+
+        # Configuración ruta herramienta
+        ttk.Label(frame_ruta_herramienta, text="Ruta de la herramienta:").pack(side="left", padx=5)
+        
+        self.entry_ruta_herramienta = ttk.Entry(frame_ruta_herramienta, width=30, font=('Arial', 14))
+        self.entry_ruta_herramienta.pack(side="left", padx=5)
+        self.entry_ruta_herramienta.insert(0, self.preferences.preferences["path_tool"])
+
+        # Botón seleccionar carpeta
+        self.btn_seleccionar_carpeta = ttk.Button(frame_ruta_herramienta, text="📁", 
+                                                style='Icon.TButton',
+                                                command=self.seleccionar_carpeta_herramienta)
+        self.btn_seleccionar_carpeta.pack(side="left", padx=5)
+
+        # Label advertencia
+        self.label_advertencia.pack(pady=10)
+
+        # Frame COLMAP
+        frame_colmap = ttk.Frame(frame_botones)
+        frame_colmap.pack(pady=10)
+
+        # Checkbutton reescalar
+        self.chkbtn_resize = BooleanVar(value=False)
+        self.check_reescalar = ttk.Checkbutton(frame_colmap, 
+                                        text="Reescalar (1/2, 1/4 y 1/8)", 
+                                        variable=self.chkbtn_resize)
+        self.check_reescalar.pack(side="left", padx=5)
+
+        # Lista de botones para deshabilitar
+        self.botones_colmap = [self.btn_carpeta, self.btn_video, self.btn_extraer, 
+                            self.btn_probar, self.btn_seleccionar_carpeta]
+
+        # Botón ejecutar COLMAP
+        self.btn_colmap = ttk.Button(frame_colmap, text="📐COLMAP (convert)", 
+                                   style='Highlight.TButton',
+                                   command=self.ejecutar_colmap)
+        self.btn_colmap.pack(side="left", padx=5)
+
+        
+    
+    def setup_gs_interface(self):
+        ttk.Label(self.gs_frame, text="Herramientas Gaussian Splatting", 
+                style='Title.TLabel').pack(pady=50)
+        
+        ttk.Button(self.gs_frame, text="< Volver a COLMAP", 
+                 command=self.toggle_gs_panel).pack(pady=20)
+        
     def actualizar_contador(self):
         if not self.ruta_imagenes or not os.path.exists(self.ruta_imagenes):
             self.label_contador.config(text="Imágenes cargadas: 0")
             self.label_carpeta_actual.config(text="Carpeta actual: Ninguna")
-            self.label_advertencia.config(text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'")
+            self.label_advertencia.config(text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", style='Warning.TLabel')
             return
 
         formatos_imagen = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"]
         lista_archivos = [archivo for archivo in os.listdir(self.ruta_imagenes) 
-                         if any(archivo.lower().endswith(formato) for formato in formatos_imagen)]
+                        if any(archivo.lower().endswith(formato) for formato in formatos_imagen)]
 
         self.label_contador.config(text=f"Imágenes cargadas: {len(lista_archivos)}")
         self.label_carpeta_actual.config(text=f"Carpeta actual: {self.ruta_imagenes}")
 
         ruta_input = os.path.join(self.ruta_imagenes, "input")
         if os.path.exists(ruta_input) and os.path.isdir(ruta_input):
-            self.label_advertencia.config(text="Carpeta 'input' encontrada", fg="green")
+            self.label_advertencia.config(text="Carpeta 'input' encontrada", style='Success.TLabel')
         else:
-            self.label_advertencia.config(text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", fg="red")
+            self.label_advertencia.config(text="Antes de continuar asegúrate que desde la carpeta\nseleccionada puedas ver la carpeta 'input'", style='Warning.TLabel')
     
     def seleccionar_carpeta(self):
         carpeta = filedialog.askdirectory()
@@ -397,24 +413,24 @@ class MainApp:
             self.root.after(0, messagebox.showwarning, "Atención", "No hay imágenes cargadas.")
             return
 
-        self.root.after(0, self.btn_extraer.config, {"state": "disabled"})
+        self.root.after(0, lambda: self.btn_extraer.config(state="disabled"))
 
         try:
             n = int(self.entry_n.get())
             if n <= 0:
                 self.root.after(0, messagebox.showerror, "Error", "El número de imágenes por segundo debe ser mayor que 0.")
-                self.root.after(0, self.btn_extraer.config, {"state": "normal"})
+                self.root.after(0, lambda: self.btn_extraer.config(state="normal"))
                 return
         except ValueError:
             self.root.after(0, messagebox.showerror, "Error", "El valor ingresado no es válido.")
-            self.root.after(0, self.btn_extraer.config, {"state": "normal"})
+            self.root.after(0, lambda: self.btn_extraer.config(state="normal"))
             return
 
         try:
             fps_video = int(self.entry_framerate.get()) if self.entry_framerate.get() else 30
         except ValueError:
             self.root.after(0, messagebox.showerror, "Error", "El framerate ingresado no es válido.")
-            self.root.after(0, self.btn_extraer.config, {"state": "normal"})
+            self.root.after(0, lambda: self.btn_extraer.config(state="normal"))
             return
 
         threading.Thread(
@@ -463,11 +479,11 @@ class MainApp:
         except Exception as e:
             self.root.after(0, messagebox.showerror, "Error", f"No se pudo filtrar las imágenes: {e}")
         finally:
-            self.root.after(0, self.btn_extraer.config, {"state": "normal"})
+            self.root.after(0, lambda: self.btn_extraer.config(state="normal"))
     
     def probar_entorno_conda(self):
         try:
-            self.root.after(0, self.btn_probar.config, {"state": "disabled"})
+            self.root.after(0, lambda: self.btn_probar.config(state="disabled"))
             nombre_entorno = self.entry_entorno.get()
             comando = f'conda run -n {nombre_entorno} python -c "print(\'¡Entorno {nombre_entorno} cargado correctamente!\')"'
             
@@ -481,7 +497,7 @@ class MainApp:
         except Exception as e:
             self.root.after(0, messagebox.showerror, "Error", f"No se pudo ejecutar el comando: {e}")
         finally:
-            self.root.after(0, self.btn_probar.config, {"state": "normal"})
+            self.root.after(0, lambda: self.btn_probar.config(state="normal"))
     
     def ejecutar_colmap(self):
         if not self.ruta_imagenes:
@@ -494,8 +510,8 @@ class MainApp:
             return
 
         for boton in self.botones_colmap:
-            self.root.after(0, boton.config, {"state": "disabled"})
-        self.root.after(0, self.btn_colmap.config, {"state": "disabled"})
+            self.root.after(0, lambda b=boton: b.config(state="disabled"))
+        self.root.after(0, lambda: self.btn_colmap.config(state="disabled"))
 
         try:
             env_name = self.entry_entorno.get()
@@ -518,8 +534,8 @@ class MainApp:
             messagebox.showerror("Error", f"No se pudo ejecutar el comando: {e}")
         finally:
             for boton in self.botones_colmap:
-                self.root.after(0, boton.config, {"state": "normal"})
-            self.root.after(0, self.btn_colmap.config, {"state": "normal"})
+                self.root.after(0, lambda b=boton: b.config(state="normal"))
+            self.root.after(0, lambda: self.btn_colmap.config(state="normal"))
 
 if __name__ == "__main__":
     root = tk.Tk()
