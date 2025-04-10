@@ -6,7 +6,14 @@ class Preferences:
 
         self.preferences = {
             "path_tool": "",
-            "environment_name": ""
+            "environment_name": "",
+            "s": "",
+            "m": "",
+            "resolution": 1,
+            "iterations": 0,
+            "save_iterations": "",
+            "optimizer_type": "",
+            "antialiasing": 0
         }
 
     def update(self, **kwargs):

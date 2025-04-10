@@ -1,1 +1,1 @@
-{"path_tool": "C:/Users/rodri/gaussian-splatting", "environment_name": "gaussian_splatting_v2"}
+{"path_tool": "C:/Users/rodri/gaussian-splatting", "environment_name": "gaussian_splatting_v2", "s": "F:\\GaussianSplatting\\Projects\\GuitarraTESTING", "m": "F:\\GaussianSplatting\\output\\GuitarraTESTING", "resolution": 8, "iterations": 10000, "save_iterations": "10000", "optimizer_type": "sparse_adam", "antialiasing": true, "train_test_exp": false, "exposure_lr_init": 0.01, "exposure_lr_final": 0.0001, "exposure_lr_delay_steps": 1000, "exposure_lr_delay_mult": 0.01}
